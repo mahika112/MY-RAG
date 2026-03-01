@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git
+venv/
+.env
+faiss_store/
+data/
+*.mp4
+*.zip
+*.pt
+*.bin

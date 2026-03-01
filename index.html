@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MYRAG · Knowledge Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Instrument+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+:root{
+  --ink:#ede8e0;--ink2:#c8bfb2;
+  --parchment:#18160f;--cream:#1f1c14;--warm:#252118;
+  --border:#2e2a1f;--border2:#3a3527;
+  --rose:#d4856e;--rose-dim:rgba(212,133,110,0.12);--rose-glow:rgba(212,133,110,0.25);
+  --gold:#c49a55;--gold-dim:rgba(196,154,85,0.14);
+  --sage:#7aaa90;--muted:#9a9080;--muted2:#5a5448;
+  --sidebar:268px;--r:16px;--ease:cubic-bezier(0.4,0,0.2,1);
+}
+body{background:var(--parchment);color:var(--ink);font-family:'Instrument Sans',sans-serif;display:flex;flex-direction:column;}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;top:-120px;right:-80px;width:500px;height:500px;background:radial-gradient(circle,rgba(212,133,110,0.07) 0%,transparent 65%);pointer-events:none;z-index:0;}
+
+/* ── HEADER ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;border-bottom:1px solid var(--border);background:rgba(24,22,15,0.96);backdrop-filter:blur(20px);position:relative;z-index:200;flex-shrink:0;gap:14px;}
+.brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.brand-mark{width:36px;height:36px;background:linear-gradient(135deg,var(--rose),var(--gold));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 4px 20px var(--rose-glow);}
+.brand-name{font-family:'Playfair Display',serif;font-size:1.22rem;font-weight:700;letter-spacing:-0.3px;}
+.brand-name em{color:var(--rose);font-style:italic}
+.brand-sub{font-size:0.63rem;color:var(--muted2);letter-spacing:0.09em;text-transform:uppercase;margin-top:1px;}
+.header-center{flex:1;display:flex;justify-content:center}
+.cur-sess{font-family:'Instrument Serif',serif;font-style:italic;font-size:0.87rem;color:var(--muted);background:var(--cream);border:1px solid var(--border);border-radius:20px;padding:5px 18px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.header-right{display:flex;align-items:center;gap:10px}
+.pill{display:flex;align-items:center;gap:7px;background:var(--cream);border:1px solid var(--border);border-radius:20px;padding:5px 13px;font-size:0.7rem;color:var(--muted);transition:0.2s;font-weight:500;}
+.pill.online{border-color:rgba(122,170,144,0.35);color:var(--sage)}
+.pill.offline{border-color:rgba(212,133,110,0.3);color:var(--rose)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--muted2);transition:0.2s}
+.pill.online .dot{background:var(--sage);box-shadow:0 0 7px rgba(122,170,144,0.5);animation:blink 2.5s infinite}
+.pill.offline .dot{background:var(--rose)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topk{display:flex;align-items:center;gap:7px;font-size:0.7rem;color:var(--muted);font-weight:500}
+.topk select{background:var(--cream);border:1px solid var(--border);color:var(--ink);border-radius:8px;padding:4px 8px;font-size:0.7rem;outline:none;cursor:pointer;font-family:'Instrument Sans',sans-serif;}
+
+/* ── UPLOAD BTN in header ── */
+.upload-btn{display:flex;align-items:center;gap:6px;background:var(--gold-dim);border:1px solid rgba(196,154,85,0.3);color:var(--gold);border-radius:9px;padding:6px 13px;font-size:0.73rem;font-weight:600;cursor:pointer;transition:0.2s;font-family:'Instrument Sans',sans-serif;}
+.upload-btn:hover{background:rgba(196,154,85,0.2);box-shadow:0 0 12px var(--gold-dim)}
+
+/* ── LAYOUT ── */
+.layout{flex:1;display:flex;overflow:hidden;position:relative;z-index:1}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar);flex-shrink:0;background:var(--cream);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.sb-head{padding:14px 14px 11px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0;}
+.sb-label{font-size:0.63rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;}
+.new-btn{display:flex;align-items:center;gap:5px;background:var(--rose);color:#fff;border:none;border-radius:9px;padding:7px 13px;font-size:0.73rem;font-weight:600;cursor:pointer;transition:0.2s var(--ease);box-shadow:0 2px 10px var(--rose-glow);font-family:'Instrument Sans',sans-serif;}
+.new-btn:hover{background:#c4705a;transform:translateY(-1px)}
+.sess-list{flex:1;overflow-y:auto;padding:8px 6px;display:flex;flex-direction:column;gap:2px;}
+.sess-list::-webkit-scrollbar{width:3px}
+.sess-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.sess-item{display:flex;align-items:center;gap:9px;padding:10px 10px;border-radius:11px;cursor:pointer;transition:0.15s var(--ease);border:1px solid transparent;}
+.sess-item:hover{background:var(--warm)}
+.sess-item.active{background:var(--parchment);border-color:var(--border2);box-shadow:0 1px 8px rgba(0,0,0,0.2)}
+.si-icon{font-size:13px;flex-shrink:0;opacity:0.55}
+.si-info{flex:1;min-width:0}
+.si-name{font-size:0.77rem;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sess-item.active .si-name{color:var(--rose);font-style:italic;font-family:'Instrument Serif',serif}
+.si-meta{font-size:0.62rem;color:var(--muted2);margin-top:2px;}
+.del-btn{opacity:0;flex-shrink:0;background:none;border:none;color:var(--rose);cursor:pointer;font-size:13px;padding:3px 5px;border-radius:5px;transition:0.15s;}
+.sess-item:hover .del-btn{opacity:0.5}
+.del-btn:hover{opacity:1!important;background:var(--rose-dim)}
+.sb-empty{font-size:0.75rem;color:var(--muted2);text-align:center;padding:32px 16px;line-height:1.8;font-style:italic;font-family:'Instrument Serif',serif}
+
+/* ── CHAT COLUMN ── */
+.chat-col{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+.chat-col::after{content:'';position:absolute;bottom:-80px;left:50%;transform:translateX(-50%);width:600px;height:300px;background:radial-gradient(ellipse,rgba(196,154,85,0.05) 0%,transparent 70%);pointer-events:none;}
+
+/* ── MESSAGES ── */
+.messages{flex:1;overflow-y:auto;padding:34px 38px 18px;display:flex;flex-direction:column;gap:26px;scroll-behavior:smooth;position:relative;z-index:1;}
+.messages::-webkit-scrollbar{width:4px}
+.messages::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* ── WELCOME ── */
+.welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:20px;padding:60px 40px;animation:riseIn 0.8s var(--ease) both;}
+@keyframes riseIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.welcome-emblem{width:72px;height:72px;background:linear-gradient(135deg,rgba(212,133,110,0.15),rgba(196,154,85,0.15));border:1.5px solid var(--border2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 8px 32px rgba(212,133,110,0.15);margin-bottom:4px;}
+.welcome h2{font-family:'Playfair Display',serif;font-size:2rem;font-weight:500;letter-spacing:-0.5px;line-height:1.2;}
+.welcome h2 em{color:var(--rose);font-style:italic}
+.welcome p{color:var(--muted);max-width:360px;line-height:1.75;font-size:0.9rem;font-weight:300;}
+.welcome-divider{width:48px;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px;}
+.chip{background:var(--cream);border:1px solid var(--border2);border-radius:20px;padding:8px 18px;font-size:0.79rem;color:var(--muted);cursor:pointer;transition:0.2s var(--ease);font-weight:400;}
+.chip:hover{border-color:var(--rose);color:var(--rose);background:var(--rose-dim);transform:translateY(-1px);box-shadow:0 4px 12px var(--rose-glow);}
+
+/* ── MSG ROW ── */
+.msg{display:flex;gap:12px;animation:msgIn 0.4s var(--ease) both}
+.msg.user{flex-direction:row-reverse}
+@keyframes msgIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;margin-top:2px;}
+.av.ai-av{background:linear-gradient(135deg,var(--rose),var(--gold));box-shadow:0 3px 12px var(--rose-glow);}
+.av.user-av{background:var(--warm);border:1.5px solid var(--border2);}
+.bcol{display:flex;flex-direction:column;gap:6px;max-width:78%}
+.msg.user .bcol{align-items:flex-end}
+.bubble{padding:14px 19px;border-radius:var(--r);font-size:0.89rem;word-break:break-word;position:relative;}
+.bubble.ai{background:#221e16;border:1px solid var(--border);border-top-left-radius:4px;box-shadow:0 2px 16px rgba(0,0,0,0.25);}
+.bubble.user{background:linear-gradient(135deg,var(--rose),#c4705a);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 20px var(--rose-glow);line-height:1.65;}
+.bubble.err{background:rgba(212,133,110,0.08);border:1px solid rgba(212,133,110,0.25);color:var(--rose);font-size:0.83rem;line-height:1.6;border-top-left-radius:4px;}
+
+/* streaming cursor */
+.cursor{display:inline-block;width:2px;height:1em;background:var(--rose);margin-left:2px;animation:cur 0.8s infinite;vertical-align:text-bottom;}
+@keyframes cur{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── MARKDOWN ── */
+.bubble.ai p{line-height:1.75;margin-bottom:10px}
+.bubble.ai p:last-child{margin-bottom:0}
+.bubble.ai h1,.bubble.ai h2,.bubble.ai h3{font-family:'Playfair Display',serif;color:var(--ink);margin:14px 0 7px;}
+.bubble.ai h1{font-size:1.15rem;font-weight:700}.bubble.ai h2{font-size:1.04rem;font-weight:600}.bubble.ai h3{font-size:0.96rem;font-weight:600;color:var(--rose)}
+.bubble.ai ul,.bubble.ai ol{padding-left:22px;margin:7px 0 11px;display:flex;flex-direction:column;gap:5px;}
+.bubble.ai li{line-height:1.7}
+.bubble.ai strong{color:var(--ink);font-weight:600}
+.bubble.ai em{color:var(--muted);font-style:italic}
+.bubble.ai code{background:var(--warm);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-family:'Courier New',monospace;font-size:0.79rem;color:var(--rose);}
+.bubble.ai pre{background:#0e0c08;border-radius:10px;padding:16px;margin:12px 0;overflow-x:auto;}
+.bubble.ai pre code{background:none;border:none;padding:0;color:#ede8e0;font-size:0.78rem}
+.bubble.ai blockquote{border-left:2px solid var(--gold);padding-left:14px;color:var(--muted);margin:10px 0;font-style:italic;font-family:'Instrument Serif',serif;}
+.bubble.ai table{width:100%;border-collapse:collapse;font-size:0.82rem;margin:12px 0}
+.bubble.ai th{background:var(--warm);padding:8px 13px;text-align:left;color:var(--rose);font-weight:600;border:1px solid var(--border)}
+.bubble.ai td{padding:8px 13px;border:1px solid var(--border);color:var(--muted)}
+
+/* ── SOURCE ACCORDION ── */
+.src-toggle{display:inline-flex;align-items:center;gap:7px;font-size:0.7rem;color:var(--gold);background:none;border:none;cursor:pointer;padding:3px 0;transition:opacity 0.15s;font-weight:500;}
+.src-toggle:hover{opacity:0.65}
+.arr{display:inline-block;transition:transform 0.2s;font-size:0.6rem}
+.src-toggle.open .arr{transform:rotate(90deg)}
+.src-list{display:none;flex-direction:column;gap:6px;margin-top:3px}
+.src-list.open{display:flex}
+.src-card{background:var(--cream);border:1px solid var(--border);border-left:2px solid var(--gold);border-radius:9px;padding:10px 13px;font-size:0.72rem;color:var(--muted);line-height:1.6;}
+.src-label{color:var(--gold);font-size:0.63rem;margin-bottom:5px;display:flex;gap:6px;align-items:center}
+.src-label .tag{background:var(--gold-dim);border-radius:4px;padding:1px 7px;font-weight:600}
+
+/* ── TYPING ── */
+.typing-wrap{display:flex;align-items:center;gap:5px;padding:14px 19px}
+.typing-wrap b{width:7px;height:7px;border-radius:50%;background:var(--border2);display:block;animation:tdot 1.2s infinite;}
+.typing-wrap b:nth-child(2){animation-delay:0.2s}.typing-wrap b:nth-child(3){animation-delay:0.4s}
+@keyframes tdot{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);background:var(--rose);opacity:1}}
+
+/* ── INPUT AREA ── */
+.input-area{padding:16px 38px 20px;border-top:1px solid var(--border);background:rgba(24,22,15,0.97);backdrop-filter:blur(20px);flex-shrink:0;position:relative;z-index:10;}
+.input-wrap{display:flex;align-items:flex-end;gap:11px;background:#221e16;border:1.5px solid var(--border2);border-radius:18px;padding:11px 14px;transition:border-color 0.2s,box-shadow 0.2s;box-shadow:0 2px 20px rgba(0,0,0,0.2);}
+.input-wrap:focus-within{border-color:var(--rose);box-shadow:0 0 0 4px var(--rose-dim),0 2px 20px rgba(0,0,0,0.3);}
+textarea{flex:1;background:none;border:none;outline:none;color:var(--ink);font-family:'Instrument Sans',sans-serif;font-size:0.9rem;resize:none;min-height:24px;max-height:130px;line-height:1.6;}
+textarea::placeholder{color:var(--muted2)}
+.send-btn{width:38px;height:38px;flex-shrink:0;background:linear-gradient(135deg,var(--rose),#c4705a);border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;transition:0.2s var(--ease);box-shadow:0 3px 12px var(--rose-glow);}
+.send-btn:hover{transform:scale(1.06) translateY(-1px);box-shadow:0 6px 20px var(--rose-glow)}
+.send-btn:disabled{opacity:0.35;cursor:not-allowed;transform:none;box-shadow:none}
+.foot{margin-top:9px;text-align:center;font-size:0.66rem;color:var(--muted2);display:flex;align-items:center;justify-content:center;gap:8px;}
+.foot span{color:var(--border2)}
+.foot .author{color:var(--rose);font-family:'Instrument Serif',serif;font-style:italic}
+
+/* ── RIGHT PANEL ── */
+.rpanel{width:265px;flex-shrink:0;border-left:1px solid var(--border);background:var(--cream);display:flex;flex-direction:column;overflow:hidden;}
+.rp-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.rp-tab{flex:1;padding:12px 8px;font-size:0.66rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);font-weight:600;cursor:pointer;text-align:center;transition:0.2s;border-bottom:2px solid transparent;}
+.rp-tab.active{color:var(--rose);border-bottom-color:var(--rose);}
+.rp-panel-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;}
+.rp-panel-body::-webkit-scrollbar{width:3px}
+.rp-panel-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.rp-empty{color:var(--muted2);font-size:0.74rem;text-align:center;margin-top:40px;line-height:1.9;font-style:italic;font-family:'Instrument Serif',serif;}
+.rp-badge{background:var(--parchment);border:1px solid var(--border2);border-radius:10px;padding:2px 8px;font-size:0.62rem;color:var(--muted);margin-left:auto;}
+
+/* source cards in right panel */
+.rp-card{background:var(--parchment);border:1px solid var(--border);border-left:2px solid var(--rose);border-radius:10px;padding:11px 12px;animation:msgIn 0.3s var(--ease);}
+.rc-num{font-size:0.62rem;color:var(--rose);margin-bottom:6px;display:flex;gap:6px;align-items:center;font-weight:600}
+.rc-num .tag{background:var(--rose-dim);border-radius:4px;padding:2px 7px}
+.rc-text{font-size:0.72rem;color:var(--muted);line-height:1.65;}
+.rc-meta{font-size:0.61rem;color:var(--muted2);margin-top:7px;border-top:1px solid var(--border);padding-top:6px}
+
+/* file cards in right panel */
+.file-card{background:var(--parchment);border:1px solid var(--border);border-left:2px solid var(--gold);border-radius:10px;padding:11px 13px;animation:msgIn 0.3s var(--ease);display:flex;align-items:center;gap:10px;}
+.file-icon{font-size:20px;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:0.77rem;color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.file-size{font-size:0.63rem;color:var(--muted2);margin-top:2px}
+
+/* ── UPLOAD MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(10,8,5,0.85);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--cream);border:1px solid var(--border2);border-radius:20px;padding:32px;width:440px;max-width:90vw;animation:riseIn 0.3s var(--ease);}
+.modal-title{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:600;margin-bottom:6px;}
+.modal-sub{font-size:0.82rem;color:var(--muted);margin-bottom:24px;line-height:1.6;}
+.drop-zone{border:2px dashed var(--border2);border-radius:14px;padding:36px 24px;text-align:center;cursor:pointer;transition:0.2s;position:relative;}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--rose);background:var(--rose-dim);}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:32px;margin-bottom:10px;}
+.drop-text{font-size:0.85rem;color:var(--muted);line-height:1.6}
+.drop-text strong{color:var(--rose)}
+.upload-progress{margin-top:18px;display:none;}
+.progress-bar-wrap{background:var(--border);border-radius:8px;height:6px;overflow:hidden;margin:8px 0;}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--rose),var(--gold));border-radius:8px;width:0%;transition:width 0.3s;}
+.upload-status{font-size:0.78rem;color:var(--muted);text-align:center;}
+.upload-status.success{color:var(--sage)}
+.upload-status.error{color:var(--rose)}
+.modal-actions{display:flex;gap:10px;margin-top:22px;justify-content:flex-end;}
+.btn-cancel{background:none;border:1px solid var(--border2);color:var(--muted);border-radius:9px;padding:8px 18px;font-size:0.8rem;cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:0.2s;}
+.btn-cancel:hover{border-color:var(--muted);color:var(--ink)}
+
+/* file list in modal */
+.uploaded-files{margin-top:16px;display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto;}
+.uf-item{display:flex;align-items:center;gap:8px;background:var(--warm);border-radius:8px;padding:8px 11px;font-size:0.78rem;}
+.uf-item .fi{font-size:16px}.uf-name{flex:1;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uf-size{color:var(--muted2);font-size:0.68rem;flex-shrink:0}
+
+/* ── RESPONSIVE ── */
+@media(max-width:960px){.rpanel{display:none}}
+@media(max-width:660px){.sidebar{display:none}.messages{padding:18px 16px}.input-area{padding:12px 16px}.topk,.upload-btn{display:none}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="brand">
+    <div class="brand-mark">✦</div>
+    <div>
+      <div class="brand-name">MY<em>RAG</em></div>
+      <div class="brand-sub">Knowledge Assistant</div>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="cur-sess" id="curSess">New Conversation</div>
+  </div>
+  <div class="header-right">
+    <div class="topk"><span>sources</span>
+      <select id="topK"><option value="3" selected>3</option><option value="5">5</option><option value="7">7</option><option value="10">10</option></select>
+    </div>
+    <button class="upload-btn" onclick="openUpload()">📄 Upload Doc</button>
+    <div class="pill" id="apiPill"><div class="dot"></div><span id="apiLabel">connecting…</span></div>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-head">
+      <span class="sb-label">History</span>
+      <button class="new-btn" onclick="newSession()">＋ New</button>
+    </div>
+    <div class="sess-list" id="sessList"></div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="chat-col">
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="q" placeholder="Ask anything from your documents…" rows="1" onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="send()">➤</button>
+      </div>
+      <div class="foot">
+        <span>Enter to send</span><span>·</span>
+        <span>Shift+Enter for new line</span><span>·</span>
+        <span>✦ crafted by <span class="author">Mahika Singh</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rpanel">
+    <div class="rp-tabs">
+      <div class="rp-tab active" id="tab-sources" onclick="switchTab('sources')">Sources</div>
+      <div class="rp-tab" id="tab-files" onclick="switchTab('files')">Documents</div>
+    </div>
+    <div class="rp-panel-body" id="rpBody">
+      <div class="rp-empty">Source passages appear here after each query.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal">
+    <div class="modal-title">Upload Document</div>
+    <div class="modal-sub">Add a new PDF, TXT, or DOCX file to your knowledge base. It will be automatically indexed.</div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".pdf,.txt,.docx,.csv" onchange="handleFile(this.files[0])"/>
+      <div class="drop-icon">📄</div>
+      <div class="drop-text">Drop your file here or <strong>browse</strong><br><small>PDF · TXT · DOCX · CSV</small></div>
+    </div>
+    <div class="upload-progress" id="uploadProgress">
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="upload-status" id="uploadStatus">Uploading…</div>
+    </div>
+    <div class="uploaded-files" id="uploadedFiles"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeUpload()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════
+const API = "http://localhost:8000";
+
+// ══════════════════════════════════
+//  STATE
+// ══════════════════════════════════
+let sessions  = JSON.parse(localStorage.getItem("myrag_v2_sessions")||"[]");
+let activeId  = null;
+let busy      = false;
+let curTab    = "sources";
+
+marked.setOptions({breaks:true,gfm:true});
+
+const save    = () => localStorage.setItem("myrag_v2_sessions",JSON.stringify(sessions));
+const getSess = id => sessions.find(s=>s.id===id);
+
+// ══════════════════════════════════
+//  SESSION OPS
+// ══════════════════════════════════
+function newSession(){
+  const id="s"+Date.now();
+  sessions.unshift({id,name:"New Conversation",ts:Date.now(),messages:[]});
+  save(); activeId=id;
+  renderSidebar(); renderMessages(); updateHeader(); clearRP();
+}
+
+function switchSession(id){
+  activeId=id; renderSidebar(); renderMessages(); updateHeader(); clearRP();
+}
+
+function deleteSess(id,e){
+  e.stopPropagation();
+  sessions=sessions.filter(s=>s.id!==id); save();
+  if(activeId===id){
+    activeId=sessions[0]?.id||null;
+    if(activeId) switchSession(activeId);
+    else{ document.getElementById("messages").innerHTML=welcomeHTML(); updateHeader(); clearRP(); }
+  }
+  renderSidebar();
+}
+
+function updateHeader(){
+  document.getElementById("curSess").textContent=getSess(activeId)?.name||"New Conversation";
+}
+
+// ══════════════════════════════════
+//  SIDEBAR
+// ══════════════════════════════════
+function timeAgo(ts){
+  const d=Math.floor((Date.now()-ts)/1000);
+  if(d<60)return"just now";if(d<3600)return Math.floor(d/60)+"m ago";
+  if(d<86400)return Math.floor(d/3600)+"h ago";return Math.floor(d/86400)+"d ago";
+}
+function renderSidebar(){
+  const list=document.getElementById("sessList");
+  if(!sessions.length){list.innerHTML='<div class="sb-empty">No conversations yet.<br>Start something new.</div>';return;}
+  list.innerHTML=sessions.map(s=>`
+    <div class="sess-item${s.id===activeId?" active":""}" onclick="switchSession('${s.id}')">
+      <div class="si-icon">✦</div>
+      <div class="si-info">
+        <div class="si-name">${esc(s.name)}</div>
+        <div class="si-meta">${s.messages.length} messages · ${timeAgo(s.ts)}</div>
+      </div>
+      <button class="del-btn" onclick="deleteSess('${s.id}',event)">✕</button>
+    </div>`).join("");
+}
+
+// ══════════════════════════════════
+//  MESSAGES
+// ══════════════════════════════════
+function welcomeHTML(){
+  return `<div class="welcome">
+    <div class="welcome-emblem">✦</div>
+    <h2>Ask your <em>Documents</em></h2>
+    <div class="welcome-divider"></div>
+    <p>Powered by FAISS vector search with conversation memory. Answers grounded in your knowledge base.</p>
+    <div class="chips">
+      <div class="chip" onclick="useChip(this)">What is Management Information System?</div>
+      <div class="chip" onclick="useChip(this)">Summarize the key topics</div>
+      <div class="chip" onclick="useChip(this)">List the main concepts covered</div>
+    </div>
+  </div>`;
+}
+
+function renderMessages(){
+  const wrap=document.getElementById("messages");
+  const sess=getSess(activeId);
+  if(!sess||!sess.messages.length){wrap.innerHTML=welcomeHTML();return;}
+  wrap.innerHTML="";
+  sess.messages.forEach(m=>{
+    if(m.role==="user") appendBubble("user",esc(m.content),[],false);
+    else appendBubble("ai",marked.parse(m.content),m.sources||[],false);
+  });
+  wrap.scrollTop=wrap.scrollHeight;
+}
+
+// ══════════════════════════════════
+//  APPEND BUBBLE
+// ══════════════════════════════════
+function appendBubble(role,html,sources=[],scroll=true){
+  const wrap=document.getElementById("messages");
+  wrap.querySelector(".welcome")?.remove();
+  const row=document.createElement("div"); row.className=`msg ${role}`;
+  const av=document.createElement("div");
+  av.className=`av ${role==="user"?"user-av":"ai-av"}`;
+  av.textContent=role==="user"?"🧑":"✦";
+  const col=document.createElement("div"); col.className="bcol";
+  const bub=document.createElement("div");
+  bub.className=`bubble ${role==="err"?"err":role}`;
+  bub.innerHTML=html;
+  col.appendChild(bub);
+
+  if(role==="ai"&&sources.length){
+    const toggle=document.createElement("button"); toggle.className="src-toggle";
+    const sl=document.createElement("div"); sl.className="src-list";
+    toggle.innerHTML=`<span class="arr">▶</span> ${sources.length} source${sources.length>1?"s":""} retrieved`;
+    toggle.onclick=()=>{toggle.classList.toggle("open");sl.classList.toggle("open")};
+    sources.forEach((s,i)=>{
+      const c=document.createElement("div"); c.className="src-card";
+      const meta=s.metadata?.source||s.metadata?.file||"";
+      c.innerHTML=`<div class="src-label"><span class="tag">source ${i+1}</span>${meta?`<span style="color:var(--muted2)">${esc(meta)}</span>`:""}</div>${esc(s.content.slice(0,300))}${s.content.length>300?"…":""}`;
+      sl.appendChild(c);
+    });
+    col.appendChild(toggle); col.appendChild(sl);
+    if(curTab==="sources") updateRP(sources);
+  }
+
+  role==="user"?(row.appendChild(col),row.appendChild(av)):(row.appendChild(av),row.appendChild(col));
+  wrap.appendChild(row);
+  if(scroll) wrap.scrollTop=wrap.scrollHeight;
+  return bub;
+}
+
+// ══════════════════════════════════
+//  TYPING
+// ══════════════════════════════════
+function showTyping(){
+  const wrap=document.getElementById("messages");
+  const row=document.createElement("div"); row.className="msg ai"; row.id="typing-row";
+  const av=document.createElement("div"); av.className="av ai-av"; av.textContent="✦";
+  const col=document.createElement("div"); col.className="bcol";
+  const bub=document.createElement("div"); bub.className="bubble ai";
+  bub.innerHTML='<div class="typing-wrap"><b></b><b></b><b></b></div>';
+  col.appendChild(bub); row.appendChild(av); row.appendChild(col);
+  wrap.appendChild(row); wrap.scrollTop=wrap.scrollHeight;
+}
+function hideTyping(){ document.getElementById("typing-row")?.remove(); }
+
+// ══════════════════════════════════
+//  RIGHT PANEL
+// ══════════════════════════════════
+function switchTab(tab){
+  curTab=tab;
+  document.getElementById("tab-sources").classList.toggle("active",tab==="sources");
+  document.getElementById("tab-files").classList.toggle("active",tab==="files");
+  if(tab==="files") loadFiles();
+  else clearRP();
+}
+
+function updateRP(sources){
+  const body=document.getElementById("rpBody"); body.innerHTML="";
+  sources.forEach((s,i)=>{
+    const card=document.createElement("div"); card.className="rp-card";
+    const meta=s.metadata?.source||s.metadata?.file||"";
+    card.innerHTML=`<div class="rc-num"><span class="tag">source ${i+1}</span>${meta?`<span style="color:var(--muted2);font-size:0.6rem">${esc(meta)}</span>`:""}</div><div class="rc-text">${esc(s.content.slice(0,360))}${s.content.length>360?"…":""}</div>`;
+    body.appendChild(card);
+  });
+}
+
+function clearRP(){
+  document.getElementById("rpBody").innerHTML=
+    curTab==="sources"
+      ?'<div class="rp-empty">Source passages appear here after each query.</div>'
+      :'<div class="rp-empty">Loading documents…</div>';
+  if(curTab==="files") loadFiles();
+}
+
+async function loadFiles(){
+  try{
+    const res=await fetch(`${API}/files`);
+    const data=await res.json();
+    const body=document.getElementById("rpBody"); body.innerHTML="";
+    if(!data.files.length){
+      body.innerHTML='<div class="rp-empty">No uploaded documents yet.<br>Click "Upload Doc" to add one.</div>';
+      return;
+    }
+    const icons={".pdf":"📕",".txt":"📄",".docx":"📘",".csv":"📊"};
+    data.files.forEach(f=>{
+      const card=document.createElement("div"); card.className="file-card";
+      card.innerHTML=`<div class="file-icon">${icons[f.type]||"📄"}</div><div class="file-info"><div class="file-name">${esc(f.name)}</div><div class="file-size">${f.size_kb} KB</div></div>`;
+      body.appendChild(card);
+    });
+  }catch{
+    document.getElementById("rpBody").innerHTML='<div class="rp-empty">Could not load file list.</div>';
+  }
+}
+
+// ══════════════════════════════════
+//  STREAMING SEND
+// ══════════════════════════════════
+async function send(){
+  if(busy) return;
+  const inp=document.getElementById("q");
+  const q=inp.value.trim(); if(!q) return;
+  if(!activeId) newSession();
+  const sess=getSess(activeId);
+  const topK=parseInt(document.getElementById("topK").value)||3;
+  inp.value=""; resize(inp);
+
+  // Auto-name session
+  if(!sess.messages.length){
+    sess.name=q.length>40?q.slice(0,40)+"…":q;
+    updateHeader();
+  }
+
+  // Build history for memory (last 6 messages)
+  const history=sess.messages.slice(-6).map(m=>({role:m.role==="ai"?"assistant":m.role, content:m.content}));
+
+  sess.messages.push({role:"user",content:q}); save(); renderSidebar();
+  appendBubble("user",esc(q));
+
+  busy=true; document.getElementById("sendBtn").disabled=true;
+
+  // Create AI bubble immediately for streaming into
+  const wrap=document.getElementById("messages");
+  wrap.querySelector(".welcome")?.remove();
+
+  const row=document.createElement("div"); row.className="msg ai";
+  const av=document.createElement("div"); av.className="av ai-av"; av.textContent="✦";
+  const col=document.createElement("div"); col.className="bcol";
+  const bub=document.createElement("div"); bub.className="bubble ai";
+  bub.innerHTML='<span class="cursor"></span>';
+  col.appendChild(bub); row.appendChild(av); row.appendChild(col);
+  wrap.appendChild(row); wrap.scrollTop=wrap.scrollHeight;
+
+  let fullAnswer="";
+  let sources=[];
+
+  try{
+    const res=await fetch(`${API}/chat-stream`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({question:q,top_k:topK,history})
+    });
+
+    if(!res.ok) throw new Error(`API error ${res.status}`);
+
+    const reader=res.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer="";
+
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split("\n");
+      buffer=lines.pop()||"";
+
+      for(const line of lines){
+        if(line.startsWith("event: sources")){
+          // next data line has sources
+        } else if(line.startsWith("event: done")){
+          // done
+        } else if(line.startsWith("data: ")){
+          const raw=line.slice(6).trim();
+          if(!raw||raw==="{}") continue;
+          try{
+            // Check if it's sources array
+            const parsed=JSON.parse(raw);
+            if(Array.isArray(parsed)){
+              sources=parsed;
+              if(curTab==="sources") updateRP(sources);
+            } else if(typeof parsed==="string"){
+              // It's a token
+              fullAnswer+=parsed;
+              // Render markdown progressively
+              bub.innerHTML=marked.parse(fullAnswer)+'<span class="cursor"></span>';
+              wrap.scrollTop=wrap.scrollHeight;
+            }
+          } catch{ /* skip */ }
+        }
+      }
+    }
+
+    // Final render without cursor
+    bub.innerHTML=marked.parse(fullAnswer||"No answer returned.");
+
+    // Add source toggle
+    if(sources.length){
+      const toggle=document.createElement("button"); toggle.className="src-toggle";
+      const sl=document.createElement("div"); sl.className="src-list";
+      toggle.innerHTML=`<span class="arr">▶</span> ${sources.length} source${sources.length>1?"s":""} retrieved`;
+      toggle.onclick=()=>{toggle.classList.toggle("open");sl.classList.toggle("open")};
+      sources.forEach((s,i)=>{
+        const c=document.createElement("div"); c.className="src-card";
+        const meta=s.metadata?.source||s.metadata?.file||"";
+        c.innerHTML=`<div class="src-label"><span class="tag">source ${i+1}</span>${meta?`<span style="color:var(--muted2)">${esc(meta)}</span>`:""}</div>${esc(s.content.slice(0,300))}${s.content.length>300?"…":""}`;
+        sl.appendChild(c);
+      });
+      col.appendChild(toggle); col.appendChild(sl);
+    }
+
+    // Save to session
+    sess.messages.push({role:"ai",content:fullAnswer,sources});
+    sess.ts=Date.now(); save(); renderSidebar();
+
+  } catch(e){
+    bub.className="bubble err";
+    bub.innerHTML=`⚠ ${esc(e.message)}. Make sure <code>python api.py</code> is running.`;
+  } finally{
+    busy=false; document.getElementById("sendBtn").disabled=false; inp.focus();
+  }
+}
+
+// ══════════════════════════════════
+//  UPLOAD MODAL
+// ══════════════════════════════════
+function openUpload(){
+  document.getElementById("uploadModal").classList.add("open");
+  loadFiles(); // refresh file list in panel
+}
+function closeUpload(){
+  document.getElementById("uploadModal").classList.remove("open");
+  document.getElementById("uploadProgress").style.display="none";
+  document.getElementById("progressBar").style.width="0%";
+  document.getElementById("fileInput").value="";
+  loadUploadedList();
+}
+
+async function loadUploadedList(){
+  try{
+    const res=await fetch(`${API}/files`);
+    const data=await res.json();
+    const container=document.getElementById("uploadedFiles");
+    if(!data.files.length){container.innerHTML="";return;}
+    const icons={".pdf":"📕",".txt":"📄",".docx":"📘",".csv":"📊"};
+    container.innerHTML=data.files.map(f=>`
+      <div class="uf-item">
+        <span class="fi">${icons[f.type]||"📄"}</span>
+        <span class="uf-name">${esc(f.name)}</span>
+        <span class="uf-size">${f.size_kb}KB</span>
+      </div>`).join("");
+  }catch{}
+}
+
+// Drag & drop
+const dz=document.getElementById("dropZone");
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag")});
+dz.addEventListener("dragleave",()=>dz.classList.remove("drag"));
+dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag");if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+
+async function handleFile(file){
+  if(!file) return;
+  const progress=document.getElementById("uploadProgress");
+  const bar=document.getElementById("progressBar");
+  const status=document.getElementById("uploadStatus");
+
+  progress.style.display="block";
+  status.className="upload-status";
+  status.textContent=`Uploading "${file.name}"…`;
+  bar.style.width="30%";
+
+  const formData=new FormData();
+  formData.append("file",file);
+
+  try{
+    bar.style.width="40%";
+    status.textContent=`⏳ Uploading "${file.name}"…`;
+    const res=await fetch(`${API}/upload`,{
+      method:"POST",body:formData,
+      signal:AbortSignal.timeout(120000)
+    });
+    bar.style.width="80%";
+    status.textContent=`⚙️ Indexing "${file.name}"… almost done`;
+    bar.style.width="100%";
+    const data=await res.json();
+
+    if(res.ok){
+      status.className="upload-status success";
+      status.textContent=`✓ ${data.message}`;
+      loadUploadedList();
+      if(curTab==="files") loadFiles();
+    } else {
+      status.className="upload-status error";
+      status.textContent=`✕ ${data.detail||"Upload failed"}`;
+    }
+  } catch(e){
+    bar.style.width="100%";
+    status.className="upload-status error";
+    status.textContent="✕ Could not reach API. Is it running?";
+  }
+}
+
+// ══════════════════════════════════
+//  UTILS
+// ══════════════════════════════════
+function esc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function resize(el){el.style.height="auto";el.style.height=Math.min(el.scrollHeight,130)+"px"}
+function onKey(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}
+function useChip(el){document.getElementById("q").value=el.textContent;send()}
+
+// Close modal on overlay click
+document.getElementById("uploadModal").addEventListener("click",function(e){if(e.target===this)closeUpload()});
+
+// ══════════════════════════════════
+//  HEALTH
+// ══════════════════════════════════
+async function checkHealth(){
+  const pill=document.getElementById("apiPill"),lbl=document.getElementById("apiLabel");
+  try{
+    const r=await fetch(`${API}/health`,{signal:AbortSignal.timeout(4000)});
+    if(r.ok){pill.className="pill online";lbl.textContent="connected";}else throw 0;
+  }catch{pill.className="pill offline";lbl.textContent="offline";}
+}
+checkHealth(); setInterval(checkHealth,15000);
+
+// ══════════════════════════════════
+//  INIT
+// ══════════════════════════════════
+renderSidebar();
+if(sessions.length) switchSession(sessions[0].id);
+else document.getElementById("messages").innerHTML=welcomeHTML();
+loadUploadedList();
+</script>
+</body>
+</html>

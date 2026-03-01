@@ -1,0 +1,22 @@
+[project]
+name = "ytrag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chromadb>=1.5.0",
+    "faiss-cpu>=1.13.2",
+    "fastapi>=0.134.0",
+    "ipykernel>=7.2.0",
+    "langchain>=1.2.10",
+    "langchain-community>=0.4.1",
+    "langchain-core>=1.2.13",
+    "langchain-text-splitters>=1.1.0",
+    "pydantic>=2.12.5",
+    "pymupdf>=1.27.1",
+    "pypdf>=6.7.0",
+    "python-multipart>=0.0.22",
+    "sentence-transformers>=5.2.3",
+    "uvicorn>=0.41.0",
+]

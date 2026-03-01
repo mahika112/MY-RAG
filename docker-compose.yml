@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  myrag:
+    build: .
+    container_name: myrag-app
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}   # reads from your .env file
+    volumes:
+      # Persist FAISS index and uploaded files across restarts
+      - ./faiss_store:/app/faiss_store
+      - ./data:/app/data
+    restart: unless-stopped
