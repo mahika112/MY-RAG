@@ -1,30 +1,15 @@
-cat > .gitignore << 'EOF'
-# Environment - NEVER push this
 .env
-
-# Virtual environment
 .venv/
-
-# Python cache
 __pycache__/
 *.pyc
 
-# Jupyter
-notebook/
-*.ipynb
+faiss_store/
+data/pdf/
+data/vector_store/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Large model files
 *.bin
 *.pt
 *.pth
-
-# FAISS index (large binary files)
-faiss_store/
-
-# Uploaded docs
-data/uploaded/
-EOF
+*.pickle
+*.pkl
+*.sqlite3
