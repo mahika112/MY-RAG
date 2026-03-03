@@ -14,7 +14,10 @@ class RAGSearch:
         if not (os.path.exists(faiss_path) and os.path.exists(meta_path)):
             from src.data_loader import load_all_documents
             docs = load_all_documents("data")
-            self.vectorstore.build_from_documents(docs)
+            if docs:
+                self.vectorstore.build_from_documents(docs)
+            else:
+                print("⚠️ No documents found — starting empty")
         else:
             self.vectorstore.load()
         groq_api_key = os.getenv("GROQ_API_KEY", "")
