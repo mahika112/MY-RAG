@@ -1,14 +1,5 @@
 """
 api.py  ─  Drop into your MYRAG root (same level as app.py)
-
-New features:
-  ✅ Streaming responses  (/chat-stream)
-  ✅ File upload & re-index  (/upload)
-  ✅ Conversation memory  (history passed per request)
-  ✅ Serves index.html at /
-
-Install new deps:
-  uv add fastapi uvicorn python-dotenv python-multipart
 """
 
 import os
@@ -31,11 +22,22 @@ from src.vectorStore import FaissVectorStore
 from src.search import RAGSearch
 
 # ── Boot ─────────────────────────────────────────────────────────────────────
-print("⏳ Loading FAISS store...")
-store = FaissVectorStore("faiss_store")
-store.load()
-print("✅ FAISS store loaded.")
+print("⏳ Checking FAISS store...")
+faiss_index_path = Path("faiss_store/faiss.index")
 
+if not faiss_index_path.exists():
+    print("⚠️ No FAISS index — starting empty, upload docs via UI")
+    store = FaissVectorStore("faiss_store")
+else:
+    store = FaissVectorStore("faiss_store")
+    store.load()
+
+print("✅ FAISS store ready.")
+rag_search = RAGSearch()
+print("✅ RAGSearch ready.")
+
+# ── Initialize RAG search ─────────────────────────────────────────────────────
+print("⏳ Initializing RAG search...")
 rag_search = RAGSearch()
 print("✅ RAGSearch ready.")
 
@@ -52,13 +54,13 @@ app.add_middleware(
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class Message(BaseModel):
-    role: str   # "user" or "assistant"
+    role: str
     content: str
 
 class ChatRequest(BaseModel):
     question: str
     top_k: int = 3
-    history: list[Message] = []   # ← conversation memory
+    history: list[Message] = []
 
 class ChatResponse(BaseModel):
     answer: str
@@ -83,18 +85,14 @@ def extract_sources(raw_chunks: list) -> list[dict]:
     return sources
 
 def build_prompt_with_history(question: str, history: list[Message], context: str) -> str:
-    """
-    Builds a prompt that includes conversation history so the LLM
-    can answer follow-up questions intelligently.
-    """
     history_text = ""
     if history:
         history_text = "\n\nConversation so far:\n"
-        for msg in history[-6:]:   # last 6 messages (3 turns) to stay within context
+        for msg in history[-6:]:
             role = "User" if msg.role == "user" else "Assistant"
             history_text += f"{role}: {msg.content}\n"
 
-    prompt = f"""You are a helpful knowledge assistant. Answer the user's question based on the context provided.
+    return f"""You are a helpful knowledge assistant. Answer the user's question based on the context provided.
 If the answer is not in the context, say so honestly.
 
 Context from documents:
@@ -103,91 +101,57 @@ Context from documents:
 Current question: {question}
 
 Answer clearly and concisely:"""
-    return prompt
 
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# ── Regular chat (non-streaming) ──────────────────────────────────────────────
+# ── Regular chat ──────────────────────────────────────────────────────────────
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     try:
-        # Retrieve chunks
         raw_chunks = store.query(req.question, top_k=req.top_k)
         sources = extract_sources(raw_chunks)
-
-        # Build context from chunks
         context = "\n\n".join([s["content"] for s in sources])
-
-        # Build memory-aware prompt
-        prompt = build_prompt_with_history(req.question, req.history, context)
-
-        # Use your existing RAG search but with memory-enhanced prompt
-        # Option A: if search_and_summarize accepts a custom prompt
-        # summary = rag_search.search_and_summarize(prompt, top_k=req.top_k)
-
-        # Option B: standard call (works without modifying your search.py)
         summary = rag_search.search_and_summarize(req.question, top_k=req.top_k)
-
         return ChatResponse(answer=summary, sources=sources)
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ── Streaming chat ─────────────────────────────────────────────────────────────
 @app.post("/chat-stream")
 async def chat_stream(req: ChatRequest):
-    """
-    Streams the answer token by token using Server-Sent Events.
-    The UI listens to this with EventSource / fetch ReadableStream.
-    """
     try:
-        # Retrieve chunks first (fast, not streamed)
         raw_chunks = store.query(req.question, top_k=req.top_k)
         sources = extract_sources(raw_chunks)
         context = "\n\n".join([s["content"] for s in sources])
 
         def generate() -> Generator[str, None, None]:
-            # 1. Send sources first as a special event so UI can show them
-            sources_json = json.dumps(sources)
-            yield f"event: sources\ndata: {sources_json}\n\n"
+            # 1. Send sources first
+            yield f"event: sources\ndata: {json.dumps(sources)}\n\n"
 
-            # 2. Stream the answer
-            # ── If your RAGSearch / ChatGroq supports streaming ──
-            # Enable streaming=True in your ChatGroq init in search.py:
-            #   self.llm = ChatGroq(..., streaming=True)
-            # Then iterate over streamed chunks:
+            # 2. Stream answer
             try:
-                # Try streaming via LangChain callback
-                full_answer = ""
                 for chunk in rag_search.llm.stream(
                     build_prompt_with_history(req.question, req.history, context)
                 ):
                     token = chunk.content if hasattr(chunk, "content") else str(chunk)
-                    full_answer += token
-                    # Send each token as SSE data
                     yield f"data: {json.dumps(token)}\n\n"
 
             except Exception:
-                # Fallback: if streaming not available, send full answer at once
+                # Fallback: word by word
                 answer = rag_search.search_and_summarize(req.question, top_k=req.top_k)
-                # Send word by word for visual effect
-                import time
                 for word in answer.split(" "):
                     yield f"data: {json.dumps(word + ' ')}\n\n"
 
-            # 3. Signal completion
+            # 3. Done signal
             yield "event: done\ndata: {}\n\n"
 
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",   # important for nginx
-            }
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
         )
 
     except Exception as e:
@@ -201,14 +165,8 @@ ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".csv"}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """
-    Accepts PDF/TXT/DOCX files, saves to data/uploaded/, then
-    ONLY embeds the new file and appends to the existing FAISS index.
-    ⚡ ~5 seconds instead of ~70 seconds — no full rebuild needed.
-    """
     global store
 
-    # Validate extension
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -216,19 +174,15 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"File type '{ext}' not supported. Allowed: {ALLOWED_EXTENSIONS}"
         )
 
-    # Save uploaded file
     save_path = UPLOAD_DIR / file.filename
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
     try:
         print(f"📄 New file uploaded: {file.filename}")
-        print(f"⚡ Incrementally indexing only: {file.filename}")
+        print(f"⚡ Incrementally indexing: {file.filename}")
 
-        # 1. Load ONLY the new file (not all documents)
         new_docs = load_all_documents(str(UPLOAD_DIR))
-
-        # Filter to only the file just uploaded to avoid re-indexing old uploads
         new_docs = [
             doc for doc in new_docs
             if file.filename in (
@@ -237,12 +191,10 @@ async def upload_file(file: UploadFile = File(...)):
         ]
 
         if not new_docs:
-            # Fallback: load all from upload dir if filtering fails
             new_docs = load_all_documents(str(UPLOAD_DIR))
 
         print(f"📑 Loaded {len(new_docs)} pages from {file.filename}")
 
-        # 2. Chunk + embed ONLY the new documents using EmbeddingPipeline
         from src.embedding import EmbeddingPipeline
         import numpy as np
 
@@ -252,19 +204,16 @@ async def upload_file(file: UploadFile = File(...)):
             chunk_overlap=store.chunk_overlap
         )
 
-        chunks    = emb_pipe.chunk_documents(new_docs)
+        chunks = emb_pipe.chunk_documents(new_docs)
         embeddings = emb_pipe.embed_chunks(chunks)
         metadatas = [{"text": chunk.page_content} for chunk in chunks]
 
         print(f"✂️  Created {len(chunks)} new chunks")
 
-        # 3. Append to existing FAISS index (no rebuild!)
         store.add_embeddings(np.array(embeddings).astype("float32"), metadatas)
-
-        # 4. Save updated index to disk
         store.save()
 
-        print(f"✅ Incrementally indexed {len(chunks)} new chunks from '{file.filename}'")
+        print(f"✅ Indexed {len(chunks)} chunks from '{file.filename}'")
 
         return {
             "status": "success",
@@ -274,11 +223,10 @@ async def upload_file(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        # Clean up if indexing fails
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
-# ── List uploaded files ────────────────────────────────────────────────────────
+# ── List files ────────────────────────────────────────────────────────────────
 @app.get("/files")
 def list_files():
     files = []
