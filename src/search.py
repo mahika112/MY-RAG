@@ -12,7 +12,10 @@ class RAGSearch:
         meta_path = os.path.join(persist_dir, "metadata.pkl")
         if not (os.path.exists(faiss_path) and os.path.exists(meta_path)):
             from src.data_loader import load_all_documents
+            print(f"[DEBUG] Files in data/: {os.listdir('data')}")
+            print(f"[DEBUG] Files in data/pdf/: {os.listdir('data/pdf') if os.path.exists('data/pdf') else 'NOT FOUND'}")
             docs = load_all_documents("data")
+            print(f"[DEBUG] Loaded {len(docs)} documents")
             if docs:
                 self.vectorstore.build_from_documents(docs)
             else:
