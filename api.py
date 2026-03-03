@@ -25,20 +25,32 @@ from src.search import RAGSearch
 print("⏳ Checking FAISS store...")
 faiss_index_path = Path("faiss_store/faiss.index")
 
-if not faiss_index_path.exists():
-    print("⚠️ No FAISS index — starting empty, upload docs via UI")
-    store = FaissVectorStore("faiss_store")
-else:
-    store = FaissVectorStore("faiss_store")
+store = FaissVectorStore("faiss_store")
+
+if faiss_index_path.exists():
+    print("📦 Existing FAISS index found. Loading...")
     store.load()
+else:
+    print("⚡ No FAISS index found. Building from /data folder...")
+
+    docs = load_all_documents("data")
+
+    if not docs:
+        print("⚠️ No documents found in /data. Starting empty store.")
+    else:
+        print(f"📄 Found {len(docs)} documents. Building index...")
+        store.build(docs)
+        store.save()
+        print("✅ FAISS index built successfully!")
 
 print("✅ FAISS store ready.")
+
 rag_search = RAGSearch()
 print("✅ RAGSearch ready.")
 
 # ── Initialize RAG search ─────────────────────────────────────────────────────
-print("⏳ Initializing RAG search...")
-rag_search = RAGSearch()
+rag_search = RAGSearch(store)
+
 print("✅ RAGSearch ready.")
 
 # ── App ───────────────────────────────────────────────────────────────────────
