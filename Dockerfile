@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y gcc g++ git curl && rm -rf /var/lib/apt
 RUN pip install uv
 RUN uv pip install --system fastapi uvicorn python-dotenv python-multipart faiss-cpu numpy pydantic langchain langchain-groq langchain-community pypdf sentence-transformers --extra-index-url https://download.pytorch.org/whl/cpu torch
 COPY . .
-RUN mkdir -p data/uploaded
+RUN mkdir -p data/uploaded faiss_store
+RUN python3 build_index.py
 EXPOSE 7860
 CMD ["python3", "api.py"]
