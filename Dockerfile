@@ -22,4 +22,4 @@ RUN mkdir -p data/uploaded
 
 EXPOSE 7860
 
-CMD ["python3", "api.py"]# force rebuild
+CMD python3 api.py# force rebuild
